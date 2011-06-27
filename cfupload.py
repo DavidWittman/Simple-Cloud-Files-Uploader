@@ -1,9 +1,4 @@
 #!/usr/bin/env python
-#
-# Rackspace Cloud Files Uploader
-# by:   David Wittman <david@wittman.com>,
-#       Jordan Callicoat <monkeesage@gmail.com>
-#
 
 import cloudfiles
 import os
