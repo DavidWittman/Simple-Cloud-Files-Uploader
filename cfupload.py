@@ -17,7 +17,7 @@ def main():
         die("Unknown error establishing connection")
 
 def usage():
-    sys.stderr.write("usage: %s [options] <destination filename>\n" % sys.argv[0])
+    sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
 
 
 def get_env(value):
@@ -31,7 +31,7 @@ def die(error):
     sys.exit(1)
 
 def get_args():
-    u = "usage %prog [options] <destination filename>"
+    u = "usage %prog [options] <filename>"
     parser = OptionParser(usage = u, 
         description = "Upload a file to Rackspace Cloud Files.")
 
