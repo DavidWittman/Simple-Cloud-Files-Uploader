@@ -10,74 +10,118 @@ import os
 import sys
 from optparse import OptionParser, OptionGroup
 
-# Rackspace Cloud Files API Information (temporary)
-username = ""
-api_key = ""
-container_name = ""
-
 def main():
-    errors = []
-
     (options, args) = get_args()
-    if len(args) is 0:
-        if not options.filename:
-            die(["Destination filename must be provided with -o"])
-        else:
-            args = [sys.stdin]
-    elif len(args) > 1:
-        die(["Invalid number of arguments."])
-
-    # TODO: test for valid options and accept environment variables
     try:
-        upload_to_cloudfiles(args[0], options.filename)
+        upload_to_cloudfiles(args[0], options)
     except cloudfiles.errors.NoSuchContainer:
-        errors.append("Container %s does not exist." % container_name)
+        die("Container %s does not exist." % container_name)
     except cloudfiles.errors.AuthenticationFailed:
-        errors.append("Cloud Files authentication failed.")
-    
-    die(errors)
+        die("Cloud Files authentication failed.")
+    except:
+        die("Unknown error establishing connection")
 
-def die(errors):
-    if errors:
-        for error in errors:
-            sys.stderr.write("Error: " + error + "\n")
-        sys.exit(1)
+def usage():
+    sys.stderr.write("usage: %s [options] <destination filename>\n" % sys.argv[0])
+
+
+def get_env(value):
+    return os.environ.get(value, '')
+
+def die(error):
+    try:
+        error()
+    except TypeError:
+        sys.stderr.write("Error: " + error + "\n")
+    sys.exit(1)
 
 def get_args():
-    usage = "usage: %prog [options] filename"
-    parser = OptionParser(usage=usage,description="Upload a file to Rackspace Cloud Files.")
+    u = "usage %prog [options] <destination filename>"
+    parser = OptionParser(usage = u, 
+        description = "Upload a file to Rackspace Cloud Files.")
 
     conngroup = OptionGroup(parser, "Cloud Files Connection Information")
-    conngroup.add_option("-k", "--apikey", dest="apikey", metavar="<api key>", help="API key. Defaults to env[CLOUD_FILES_APIKEY]")
-    conngroup.add_option("-u", "--user", dest="user", metavar="<username>", help="Username. Defaults to env[CLOUD_FILES_USERNAME]")
-    conngroup.add_option("-c", "--container", dest="container", metavar="<container>", help="Container name. Defaults to env[CLOUD_FILES_CONTAINER]")
+    
+    conngroup.add_option("-k", "--apikey", 
+        dest = "apikey", 
+        metavar = "<api key>", 
+        help = "API key. Defaults to env[CLOUD_FILES_APIKEY]",
+        default = get_env('CLOUD_FILES_APIKEY') )
+
+    conngroup.add_option("-u", "--user", 
+        dest = "user", 
+        metavar = "<username>", 
+        help = "Username. Defaults to env[CLOUD_FILES_USERNAME]",
+        default = get_env('CLOUD_FILES_USERNAME') )
+
+    conngroup.add_option("-c", "--container", 
+        dest = "container", 
+        metavar = "<container>", 
+        help = "Container name. Defaults to env[CLOUD_FILES_CONTAINER]",
+        default = get_env('CLOUD_FILES_CONTAINER') )
+    
+    conngroup.add_option("-s", "--snet",
+        action = "store_true",
+        dest = "snet",
+        help = "Use ServiceNet for connections",
+        default = False )
+
     parser.add_option_group(conngroup)
 
     outputgroup = OptionGroup(parser, "Output options")
-    outputgroup.add_option("-o", "--file", dest="filename", metavar="<filename>", type="string", help="Destination filename")
-    outputgroup.add_option("-s", action="store_true", dest="silent", help="Silence output", default=False)
+    
+    outputgroup.add_option("-o", "--file", 
+        dest = "destination", 
+        metavar = "<filename>", 
+        type = "string", 
+        help = "Destination filename")
+
+    outputgroup.add_option("-q", 
+        action = "store_true", 
+        dest = "quiet", 
+        help = "Silence output", 
+        default = False)
+
     parser.add_option_group(outputgroup)
 
-    return parser.parse_args()
+    (opts, args) = parser.parse_args()
 
-def upload_to_cloudfiles(filename, destination):
-    if destination is None:
-        destination = os.path.basename(filename)
+    return check_opts(opts, args)
+
+def check_opts(options, args):
+    if len(args) is 1 and sys.stdin.isatty():
+        pass
+    # if sys.stdin.isatty = true, script is standalone
+    elif len(args) is 0 and not sys.stdin.isatty():
+        if not options.destination:
+            die("Destination filename must be provided with -o")
+        args = [sys.stdin]
+    else:
+        die(usage)
+    if not options.apikey or not options.user or not options.container:
+        die("Missing Cloud Files account information. Seek help.")
+
+    return (options, args)
+
+def upload_to_cloudfiles(filename, opts):
+    if opts.destination is None:
+        opts.destination = os.path.basename(filename)
 
     # Establish connection to Cloud Files and open container
-    conn = cloudfiles.get_connection(username, api_key, servicenet=True)
-    container = conn.get_container(container_name)
-    cloudpath = container.create_object(destination)
+    conn = cloudfiles.get_connection(opts.user, opts.apikey, servicenet=opts.snet)
+    container = conn.get_container(opts.container)
+    cloudpath = container.create_object(opts.destination)
 
     # If it's iterable, use CF_storage_object's send method
     if hasattr(filename, "read"):
         cloudpath.send(filename)
+        print("File %s uploaded successfully" % opts.destination)
     # Upload file to Cloud Files using load_from_filename()
     elif(os.path.exists(filename)):
         cloudpath.load_from_filename(filename)
-        print("File %s uploaded successfully" % filename)
+        print("File %s uploaded successfully" % opts.destination)
     else:
-        print("File not found")
+        die("File not found")
 
 if __name__ == '__main__':
     main()
