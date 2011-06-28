@@ -31,3 +31,4 @@
 <h3>Planned Improvements</h3>
 * Installation via distutils setup.py script
 * Option to pass in config file for Cloud Files credentials
+* Support for uploading multiple files passed as arguments
