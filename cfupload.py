@@ -31,7 +31,7 @@ def die(error):
     sys.exit(1)
 
 def get_args():
-    u = "usage %prog [options] <filename>"
+    u = "%prog [options] <filename>"
     parser = OptionParser(usage = u, 
         description = "Upload a file to Rackspace Cloud Files.")
 
