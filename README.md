@@ -1,5 +1,4 @@
 <h1>Simple Cloud Files Uploader</h1>
-<h4>by: David Wittman <david@wittman.com></h4>
 <p>Python script to quickly upload a file to Rackspace Cloud Files. Originally developed to make one-liner uploads more manageable. Supports input via file arguments or standard input.</p>
 
 <h3>Usage</h3>
@@ -28,3 +27,7 @@
 * A destination filename must be provided with -o when uploading from standard input
 * Pipe your files from standard input to make cronjob backups stupid easy:
 	<p>`# mysqldump --all-databases | gzip -c | ./cfupload.py -u example -k 75cbad4d83e196fcdfc8618fd74720ae -c foo -o backup.sql.gz`</p>
+
+<h3>Planned Improvements</h3>
+* Installation via distutils setup.py script
+* Option to pass in config file for Cloud Files credentials
