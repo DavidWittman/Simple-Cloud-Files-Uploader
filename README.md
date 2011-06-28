@@ -3,6 +3,7 @@
 <p>Python script to quickly upload a file to Rackspace Cloud Files. Originally developed to make one-liner uploads more manageable. Supports input via file arguments or standard input.</p>
 
 <h3>Usage</h3>
+<blockquote>
 Usage: cfupload.py [options] <filename>
 
 Upload a file to Rackspace Cloud Files.
@@ -23,9 +24,9 @@ Options:
     -o <filename>, --file=<filename>
                         Destination filename
     -q                  Silence output
-
+</blockquote>
 <h3>Pro Tips</h3>
-	* Export environment variables CLOUD_FILES_{APIKEY,USERNAME,CONTAINER} in your bash_profile to prevent the need to specify these options each time you run cfupload
-	* A destination filename must be provided with -o when uploading from standard input
-	* Pipe your files from standard input to make cronjob backups stupid easy:
-		ex. # mysqldump --all-databases | gzip -c | ./cfupload.py -u example -k 75cbad4d83e196fcdfc8618fd74720ae -c foo -o backup.sql.gz
+* Export environment variables CLOUD_FILES_{APIKEY,USERNAME,CONTAINER} in your bash_profile to prevent the need to specify these options each time you run cfupload
+* A destination filename must be provided with -o when uploading from standard input
+* Pipe your files from standard input to make cronjob backups stupid easy:
+	`# mysqldump --all-databases | gzip -c | ./cfupload.py -u example -k 75cbad4d83e196fcdfc8618fd74720ae -c foo -o backup.sql.gz`
