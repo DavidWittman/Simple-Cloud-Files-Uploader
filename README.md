@@ -27,8 +27,3 @@
 * A destination filename must be provided with -o when uploading from standard input
 * Pipe your files from standard input to make cronjob backups stupid easy:
 	<p>`# mysqldump --all-databases | gzip -c | ./cfupload.py -u example -k 75cbad4d83e196fcdfc8618fd74720ae -c foo -o backup.sql.gz`</p>
-
-<h3>Planned Improvements</h3>
-* Installation via distutils setup.py script
-* Option to pass in config file for Cloud Files credentials
-* Support for uploading multiple files passed as arguments
