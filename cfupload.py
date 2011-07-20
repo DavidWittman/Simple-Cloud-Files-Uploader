@@ -10,7 +10,7 @@ def main():
     try:
         upload_to_cloudfiles(args[0], options)
     except cloudfiles.errors.NoSuchContainer:
-        die("Container %s does not exist." % container_name)
+        die("Container %s does not exist." % options.container)
     except cloudfiles.errors.AuthenticationFailed:
         die("Cloud Files authentication failed.")
     except:
