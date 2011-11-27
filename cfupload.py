@@ -1,9 +1,13 @@
 #!/usr/bin/env python
+# Simple Cloud Files Uploader
+# Uploads a single file to Rackspace Cloud Files
+# Author: David Wittman <david@wittman.com>
 
-import cloudfiles
 import os
 import sys
 from optparse import OptionParser, OptionGroup
+
+import cloudfiles
 
 def main():
     (options, args) = get_args()
@@ -32,30 +36,35 @@ def die(error):
 
 def get_args():
     u = "%prog [options] <filename>"
-    parser = OptionParser(usage = u, 
+    parser = OptionParser(
+        usage = u, 
         description = "Upload a file to Rackspace Cloud Files.")
 
     conngroup = OptionGroup(parser, "Cloud Files Connection Information")
     
-    conngroup.add_option("-k", "--apikey", 
+    conngroup.add_option(
+        "-k", "--apikey", 
         dest = "apikey", 
         metavar = "<api key>", 
         help = "API key. Defaults to env[CLOUD_FILES_APIKEY]",
         default = get_env('CLOUD_FILES_APIKEY') )
 
-    conngroup.add_option("-u", "--user", 
+    conngroup.add_option(
+        "-u", "--user", 
         dest = "user", 
         metavar = "<username>", 
         help = "Username. Defaults to env[CLOUD_FILES_USERNAME]",
         default = get_env('CLOUD_FILES_USERNAME') )
 
-    conngroup.add_option("-c", "--container", 
+    conngroup.add_option(
+        "-c", "--container", 
         dest = "container", 
         metavar = "<container>", 
         help = "Container name. Defaults to env[CLOUD_FILES_CONTAINER]",
         default = get_env('CLOUD_FILES_CONTAINER') )
     
-    conngroup.add_option("-s", "--snet",
+    conngroup.add_option(
+        "-s", "--snet",
         action = "store_true",
         dest = "snet",
         help = "Use ServiceNet for connections",
@@ -65,13 +74,15 @@ def get_args():
 
     outputgroup = OptionGroup(parser, "Output options")
     
-    outputgroup.add_option("-o", "--file", 
+    outputgroup.add_option(
+        "-o", "--file", 
         dest = "destination", 
         metavar = "<filename>", 
         type = "string", 
         help = "Destination filename")
 
-    outputgroup.add_option("-q", 
+    outputgroup.add_option(
+        "-q", 
         action = "store_true", 
         dest = "quiet", 
         help = "Silence output", 
@@ -103,7 +114,8 @@ def upload_to_cloudfiles(filename, opts):
         opts.destination = os.path.basename(filename)
 
     # Establish connection to Cloud Files and open container
-    conn = cloudfiles.get_connection(opts.user, opts.apikey, servicenet=opts.snet)
+    conn = cloudfiles.get_connection(opts.user, opts.apikey, 
+                                    servicenet=opts.snet)
     container = conn.get_container(opts.container)
     cloudpath = container.create_object(opts.destination)
 
