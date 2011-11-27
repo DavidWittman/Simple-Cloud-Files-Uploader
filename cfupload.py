@@ -10,6 +10,8 @@ from optparse import OptionParser, OptionGroup
 import cloudfiles
 
 def main():
+    """Main execution thread"""
+    
     (options, args) = get_args()
     try:
         upload_to_cloudfiles(args[0], options)
@@ -25,6 +27,8 @@ def usage():
 
 
 def get_env(value):
+    """Gets an environment variable"""
+    
     return os.environ.get(value, '')
 
 def die(error):
@@ -95,6 +99,8 @@ def get_args():
     return check_opts(opts, args)
 
 def check_opts(options, args):
+    """Make sure we have all the necessary options"""
+    
     if len(args) is 1 and sys.stdin.isatty():
         pass
     # if sys.stdin.isatty = true, script is standalone
@@ -110,6 +116,14 @@ def check_opts(options, args):
     return (options, args)
 
 def upload_to_cloudfiles(filename, opts):
+    """Push the object to Cloud Files.
+    
+    Args:
+        filename: A stream or path to the object to upload.
+        opts: Options object returned by OptParser
+
+    """
+    
     if opts.destination is None:
         opts.destination = os.path.basename(filename)
 
