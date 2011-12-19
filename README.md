@@ -26,4 +26,4 @@
 * Export environment variables `CLOUD_FILES_{APIKEY,USERNAME,CONTAINER}` in your bash_profile to prevent the need to specify these options each time you run cfupload
 * A destination filename must be provided with -o when uploading from standard input
 * Pipe your files from standard input to make cronjob backups stupid easy:
-	<p>`# mysqldump --all-databases | gzip -c | ./cfupload.py -u example -k 75cbad4d83e196fcdfc8618fd74720ae -c foo -o backup-$(date '+%Y%m%d').sql.gz`</p>
+	<p>`# mysqldump --all-databases | gzip -c | /usr/bin/cfupload.py -u example -k 75cbad4d83e196fcdfc8618fd74720ae -c foo -o backup-$(date '+%Y%m%d').sql.gz`</p>
