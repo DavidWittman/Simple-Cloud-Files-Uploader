@@ -136,13 +136,15 @@ def upload_to_cloudfiles(filename, opts):
     # If it's iterable, use CF_storage_object's send method
     if hasattr(filename, "read"):
         cloudpath.send(filename)
-        print("File %s uploaded successfully" % opts.destination)
     # Upload file to Cloud Files using load_from_filename()
-    elif(os.path.exists(filename)):
+    elif (os.path.exists(filename)):
         cloudpath.load_from_filename(filename)
-        print("File %s uploaded successfully" % opts.destination)
     else:
         die("File not found")
+
+    print("File %s uploaded successfully." % opts.destination)
+    if container.is_public():
+        print("CDN URL: %s/%s" % (container.public_uri(), opts.destination))
 
 if __name__ == '__main__':
     main()
