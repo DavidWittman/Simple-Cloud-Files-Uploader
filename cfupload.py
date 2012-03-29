@@ -148,3 +148,5 @@ def upload_to_cloudfiles(filename, opts):
 
 if __name__ == '__main__':
     main()
+
+# vim: set expandtab ts=4 sw=4 sts=4:
