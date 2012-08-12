@@ -1,34 +1,43 @@
 #!/usr/bin/env python
 # Simple Cloud Files Uploader
-# Uploads a single file to Rackspace Cloud Files
+# Uploads a file or files to Rackspace Cloud Files
 # Author: David Wittman <david@wittman.com>
 
 import os
 import sys
+from contextlib import contextmanager
 from optparse import OptionParser, OptionGroup
 
 import cloudfiles
 
 def main():
-    """Main execution thread"""
+    "Main execution thread"
     
     (options, args) = get_args()
-    try:
-        upload_to_cloudfiles(args[0], options)
-    except cloudfiles.errors.NoSuchContainer:
-        die("Container %s does not exist." % options.container)
-    except cloudfiles.errors.AuthenticationFailed:
-        die("Cloud Files authentication failed.")
-    except:
-        die("Unknown error establishing connection")
+
+    # if sys.stdin.isatty = false, there is content in stdin
+    if len(args) is 0 and not sys.stdin.isatty():
+        if not options.destination:
+            die("Destination filename must be provided with -o")
+        files = [sys.stdin]
+    elif len(args) > 0:
+        files = args
+    else:
+        die(usage)
+
+    if not options.apikey or not options.user or not options.container:
+        die("Missing Cloud Files account information. Seek help.")
+
+    # Begin upload
+    with get_cloudfiles_container(options) as container:
+        for _file in files:
+            upload_to_cloudfiles(container, _file, options)
 
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
 
-
 def get_env(value):
-    """Gets an environment variable"""
-    
+    "Gets an environment variable"
     return os.environ.get(value, '')
 
 def die(error):
@@ -70,7 +79,7 @@ def get_args():
     conngroup.add_option(
         "-s", "--snet",
         action = "store_true",
-        dest = "snet",
+        dest = "servicenet",
         help = "Use ServiceNet for connections",
         default = False )
 
@@ -94,44 +103,39 @@ def get_args():
 
     parser.add_option_group(outputgroup)
 
-    (opts, args) = parser.parse_args()
+    return parser.parse_args()
 
-    return check_opts(opts, args)
+@contextmanager
+def get_cloudfiles_container(opts):
+    try:
+        connection = cloudfiles.get_connection(opts.user,
+                                               opts.apikey,
+                                               servicenet=opts.servicenet)
+        yield connection.get_container(opts.container)
+    except cloudfiles.errors.NoSuchContainer:
+        die("Container %s does not exist." % opts.container)
+    except cloudfiles.errors.AuthenticationFailed:
+        die("Cloud Files authentication failed.")
+    except:
+        die("Unknown error establishing connection")
+    finally:
+        del connection
 
-def check_opts(options, args):
-    """Make sure we have all the necessary options"""
-    
-    if len(args) is 1 and sys.stdin.isatty():
-        pass
-    # if sys.stdin.isatty = true, script is standalone
-    elif len(args) is 0 and not sys.stdin.isatty():
-        if not options.destination:
-            die("Destination filename must be provided with -o")
-        args = [sys.stdin]
-    else:
-        die(usage)
-    if not options.apikey or not options.user or not options.container:
-        die("Missing Cloud Files account information. Seek help.")
-
-    return (options, args)
-
-def upload_to_cloudfiles(filename, opts):
-    """Push the object to Cloud Files.
+def upload_to_cloudfiles(container, filename, opts):
+    """
+    Upload an object to Cloud Files.
     
     Args:
+        container: A cloudfiles container object
         filename: A stream or path to the object to upload.
         opts: Options object returned by OptParser
 
     """
     
     if opts.destination is None:
-        opts.destination = os.path.basename(filename)
+        destination = os.path.basename(filename)
 
-    # Establish connection to Cloud Files and open container
-    conn = cloudfiles.get_connection(opts.user, opts.apikey, 
-                                    servicenet=opts.snet)
-    container = conn.get_container(opts.container)
-    cloudpath = container.create_object(opts.destination)
+    cloudpath = container.create_object(destination)
 
     # If it's iterable, use CF_storage_object's send method
     if hasattr(filename, "read"):
@@ -142,9 +146,9 @@ def upload_to_cloudfiles(filename, opts):
     else:
         die("File not found")
 
-    print("File %s uploaded successfully." % opts.destination)
+    print("File %s uploaded successfully." % destination)
     if container.is_public():
-        print("CDN URL: %s/%s" % (container.public_uri(), opts.destination))
+        print("CDN URL: %s/%s" % (container.public_uri(), destination))
 
 if __name__ == '__main__':
     main()
