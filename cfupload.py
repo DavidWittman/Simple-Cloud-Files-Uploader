@@ -13,25 +13,28 @@ import cloudfiles
 def main():
     "Main execution thread"
     
-    (options, args) = get_args()
+    (opts, args) = get_args()
 
     # if sys.stdin.isatty = false, there is content in stdin
     if len(args) is 0 and not sys.stdin.isatty():
-        if not options.destination:
+        if not opts.destination:
             die("Destination filename must be provided with -o")
         files = [sys.stdin]
     elif len(args) > 0:
+        if len(args) > 1 and opts.destination:
+            die("Destination filename can only be provided for individual "
+                + "uploads")
         files = args
     else:
         die(usage)
 
-    if not options.apikey or not options.user or not options.container:
+    if not opts.apikey or not opts.user or not opts.container:
         die("Missing Cloud Files account information. Seek help.")
 
     # Begin upload
-    with get_cloudfiles_container(options) as container:
+    with get_cloudfiles_container(opts) as container:
         for _file in files:
-            upload_to_cloudfiles(container, _file, options)
+            upload_to_cloudfiles(container, _file, opts)
 
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
