@@ -3,38 +3,38 @@
 # Uploads a file or files to Rackspace Cloud Files
 # Author: David Wittman <david@wittman.com>
 
+import argparse
 import os
 import sys
 from contextlib import contextmanager
-from optparse import OptionParser, OptionGroup
 
 import cloudfiles
 
 def main():
     "Main execution thread"
     
-    (opts, args) = get_args()
+    args = get_args()
 
     # if sys.stdin.isatty = false, there is content in stdin
-    if len(args) is 0 and not sys.stdin.isatty():
-        if not opts.destination:
+    if len(args.files) is 0 and not sys.stdin.isatty():
+        if not args.destination:
             die("Destination filename must be provided with -o")
         files = [sys.stdin]
-    elif len(args) > 0:
-        if len(args) > 1 and opts.destination:
+    elif len(args.files) > 0:
+        if len(args.files) > 1 and args.destination:
             die("Destination filename can only be provided for individual "
                 + "uploads")
-        files = args
+        files = args.files
     else:
         die(usage)
 
-    if not opts.apikey or not opts.user or not opts.container:
+    if not args.apikey or not args.user or not args.container:
         die("Missing Cloud Files account information. Seek help.")
 
     # Begin upload
-    with get_cloudfiles_container(opts) as container:
+    with get_cloudfiles_container(args) as container:
         for _file in files:
-            upload_to_cloudfiles(container, _file, opts)
+            upload_to_cloudfiles(container, _file, args)
 
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
@@ -51,91 +51,88 @@ def die(error):
     sys.exit(1)
 
 def get_args():
-    u = "%prog [options] <filename>"
-    parser = OptionParser(
-        usage = u, 
-        description = "Upload a file to Rackspace Cloud Files.")
+    desc = "Upload files to Rackspace Cloud Files"
 
-    conngroup = OptionGroup(parser, "Cloud Files Connection Information")
+    parser = argparse.ArgumentParser(description=desc)
+
+    conngroup = parser.add_argument_group("Cloud Files Connection Information")
     
-    conngroup.add_option(
+    conngroup.add_argument(
         "-k", "--apikey", 
         dest = "apikey", 
         metavar = "<api key>", 
         help = "API key. Defaults to env[CLOUD_FILES_APIKEY]",
         default = get_env('CLOUD_FILES_APIKEY') )
 
-    conngroup.add_option(
+    conngroup.add_argument(
         "-u", "--user", 
         dest = "user", 
         metavar = "<username>", 
         help = "Username. Defaults to env[CLOUD_FILES_USERNAME]",
         default = get_env('CLOUD_FILES_USERNAME') )
 
-    conngroup.add_option(
-        "-c", "--container", 
-        dest = "container", 
-        metavar = "<container>", 
-        help = "Container name. Defaults to env[CLOUD_FILES_CONTAINER]",
-        default = get_env('CLOUD_FILES_CONTAINER') )
-    
-    conngroup.add_option(
+    conngroup.add_argument(
         "-s", "--snet",
         action = "store_true",
         dest = "servicenet",
         help = "Use ServiceNet for connections",
         default = False )
 
-    parser.add_option_group(conngroup)
-
-    outputgroup = OptionGroup(parser, "Output options")
+    outputgroup = parser.add_argument_group("Output options")
     
-    outputgroup.add_option(
+    outputgroup.add_argument(
         "-o", "--file", 
         dest = "destination", 
         metavar = "<filename>", 
-        type = "string", 
-        help = "Destination filename")
+        help = "Destination filename in Cloud Files")
 
-    outputgroup.add_option(
+    outputgroup.add_argument(
         "-q", 
         action = "store_true", 
         dest = "quiet", 
         help = "Silence output", 
         default = False)
 
-    parser.add_option_group(outputgroup)
+    parser.add_argument(
+        "container",
+        help = "Cloud Files container name")
+
+    parser.add_argument(
+        "files",
+        help = "The file(s) to upload",
+        # Accept all of the remaining arguments as filenames
+        nargs = '*')
 
     return parser.parse_args()
 
 @contextmanager
-def get_cloudfiles_container(opts):
+def get_cloudfiles_container(args):
     try:
-        connection = cloudfiles.get_connection(opts.user,
-                                               opts.apikey,
-                                               servicenet=opts.servicenet)
-        yield connection.get_container(opts.container)
+        connection = cloudfiles.get_connection(args.user,
+                                               args.apikey,
+                                               servicenet=args.servicenet)
+        yield connection.get_container(args.container)
     except cloudfiles.errors.NoSuchContainer:
-        die("Container %s does not exist." % opts.container)
+        die("Container %s does not exist." % args.container)
     except cloudfiles.errors.AuthenticationFailed:
         die("Cloud Files authentication failed.")
     except:
         die("Unknown error establishing connection")
-    finally:
+    else:
         del connection
 
-def upload_to_cloudfiles(container, filename, opts):
+def upload_to_cloudfiles(container, filename, args):
     """
     Upload an object to Cloud Files.
     
     Args:
         container: A cloudfiles container object
         filename: A stream or path to the object to upload.
-        opts: Options object returned by OptParser
+        args: Arguments Namespace returned by ArgumentParser
 
     """
     
-    if opts.destination is None:
+    if args.destination is None:
         destination = os.path.basename(filename)
 
     cloudpath = container.create_object(destination)
@@ -149,9 +146,10 @@ def upload_to_cloudfiles(container, filename, opts):
     else:
         die("File not found")
 
-    print("File %s uploaded successfully." % destination)
-    if container.is_public():
-        print("CDN URL: %s/%s" % (container.public_uri(), destination))
+    if not args.quiet:
+        print("File %s uploaded successfully." % destination)
+        if container.is_public():
+            print("CDN URL: %s/%s" % (container.public_uri(), destination))
 
 if __name__ == '__main__':
     main()
