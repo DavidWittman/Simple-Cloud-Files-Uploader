@@ -132,9 +132,8 @@ def upload_to_cloudfiles(container, filename, args):
 
     """
     
-    if args.destination is None:
-        destination = os.path.basename(filename)
-
+    destination = args.destination and args.destination \
+                                   or  os.path.basename(filename)
     cloudpath = container.create_object(destination)
 
     # If it's iterable, use CF_storage_object's send method
