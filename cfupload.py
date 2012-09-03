@@ -78,6 +78,13 @@ def get_args():
         help = "Use ServiceNet for connections",
         default = False )
 
+    conngroup.add_argument(
+        "--uk",
+        action = "store_true",
+        dest = "uk",
+        help = "Use London Auth URL (UK accounts only)",
+        default = False)
+
     outputgroup = parser.add_argument_group("Output options")
     
     outputgroup.add_argument(
@@ -107,10 +114,13 @@ def get_args():
 
 @contextmanager
 def get_cloudfiles_container(args):
+    auth_url = cloudfiles.uk_authurl if args.uk else cloudfiles.us_authurl
+
     try:
         connection = cloudfiles.get_connection(args.user,
                                                args.apikey,
-                                               servicenet=args.servicenet)
+                                               servicenet=args.servicenet,
+                                               authurl=auth_url)
         yield connection.get_container(args.container)
     except cloudfiles.errors.NoSuchContainer:
         die("Container %s does not exist." % args.container)

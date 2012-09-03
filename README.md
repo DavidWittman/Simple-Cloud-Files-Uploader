@@ -4,8 +4,8 @@ Python script to quickly upload files to Rackspace Cloud Files. Originally devel
 ## Usage
 
 ```
-usage: cfupload.py [-h] [-k <api key>] [-u <username>] [-s] [-o <filename>]
-                   [-q]
+usage: cfupload.py [-h] [-k <api key>] [-u <username>] [-s] [--uk]
+                   [-o <filename>] [-q]
                    container [files [files ...]]
 
 Upload files to Rackspace Cloud Files
@@ -23,6 +23,7 @@ Cloud Files Connection Information:
   -u <username>, --user <username>
                         Username. Defaults to env[CLOUD_FILES_USERNAME]
   -s, --snet            Use ServiceNet for connections
+  --uk                  Use London Auth URL (UK accounts only)
 
 Output options:
   -o <filename>, --file <filename>
