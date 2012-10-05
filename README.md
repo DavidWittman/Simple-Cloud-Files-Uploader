@@ -1,6 +1,10 @@
 # Simple Cloud Files Uploader
 Python script to quickly upload files to Rackspace Cloud Files. Originally developed to make one-liner uploads more manageable. Supports input via file arguments or standard input.
 
+## Installation
+
+`pip install cfupload`
+
 ## Usage
 
 ```
