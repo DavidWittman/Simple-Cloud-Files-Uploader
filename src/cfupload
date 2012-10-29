@@ -129,20 +129,27 @@ def get_args():
 def get_cloudfiles_container(args):
     auth_url = args.auth_url or 'https://identity.api.rackspacecloud.com/v1.0'
 
-    try:
-        connection = cloudfiles.get_connection(args.user,
-                                               args.apikey,
-                                               servicenet=args.servicenet,
-                                               authurl=auth_url)
-        yield connection.get_container(args.container)
-    except cloudfiles.errors.NoSuchContainer:
-        die("Container %s does not exist." % args.container)
-    except cloudfiles.errors.AuthenticationFailed:
-        die("Authentication failed to %s" % auth_url)
-    except Exception as e:
-        die("Unknown error establishing connection to %s" % auth_url)
-    else:
-        del connection
+    while True:
+        try:
+            connection = cloudfiles.get_connection(args.user,
+                                                   args.apikey,
+                                                   servicenet=args.servicenet,
+                                                   authurl=auth_url)
+            yield connection.get_container(args.container)
+        except cloudfiles.errors.NoSuchContainer:
+            sys.stderr.write("[WARN] The container %s does not exist. "
+                             % args.container)
+            sys.stderr.write("Creating it now.\n")
+            connection.create_container(args.container)
+            continue
+        except cloudfiles.errors.AuthenticationFailed:
+            die("Authentication failed to %s" % auth_url)
+        except Exception as e:
+            die("Unknown error establishing connection to %s" % auth_url)
+        else:
+            del connection
+
+        break
 
 def upload_to_cloudfiles(container, filename, args):
     """
