@@ -5,7 +5,6 @@
 
 import argparse
 import os
-import os.path
 import sys
 from contextlib import contextmanager
 
@@ -34,6 +33,12 @@ def main():
 
     # Begin upload
     with get_cloudfiles_container(args) as container:
+        # Disable CDN URL printing if the container is not public
+        if args.cdn_true and not container.is_public():
+            sys.stderr.write('[WARN] This container is not public. Disabling '
+                             + 'CDN URL output.\n')
+            args.cdn_true = False
+
         for _file in files:
             if os.path.isfile(_file):
                 upload_to_cloudfiles(container, _file, args)
@@ -79,8 +84,8 @@ def get_args():
         "-a", "--auth", 
         dest = "auth_url", 
         metavar = "<auth_url>", 
-        help = "Authentiction end point. Defaults to env[CLOUD_FILE_AUTHENTICAION_URL]",
-        default = get_env('CLOUD_FILES_AUTHENTICAION_URL') )
+        help = "Authentication endpoint. Defaults to env[CLOUD_FILES_AUTH_URL]",
+        default = get_env('CLOUD_FILES_AUTH_URL') )
 
     conngroup.add_argument(
         "-s", "--snet",
@@ -125,7 +130,7 @@ def get_args():
 
 @contextmanager
 def get_cloudfiles_container(args):
-    auth_url = args.auth_url
+    auth_url = args.auth_url or 'https://identity.api.rackspacecloud.com/v1.0'
 
     try:
         connection = cloudfiles.get_connection(args.user,
@@ -136,9 +141,9 @@ def get_cloudfiles_container(args):
     except cloudfiles.errors.NoSuchContainer:
         die("Container %s does not exist." % args.container)
     except cloudfiles.errors.AuthenticationFailed:
-        die("Authentication failed to "+auth_url)
-    except:
-        die("Unknown error establishing connection "+auth_url)
+        die("Authentication failed to %s" % auth_url)
+    except Exception as e:
+        die("Unknown error establishing connection to %s" % auth_url)
     else:
         del connection
 
@@ -169,13 +174,9 @@ def upload_to_cloudfiles(container, filename, args):
     if not args.quiet:
         print("File %s uploaded successfully." % destination)
         if args.cdn_true:
-            try:
-                if container.is_public():
-                    print("CDN URL: %s/%s" % (container.public_uri(), destination))
-            except cloudfiles.errors.CDNNotEnabled:
-                print("CDN not enabled on %s/%s" % (container, destination))
+            print("CDN URL: %s/%s" % (container.public_uri(), destination))
+
 if __name__ == '__main__':
     main()
 
 # vim: set expandtab ts=4 sw=4 sts=4:
- 
