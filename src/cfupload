@@ -47,13 +47,7 @@ def main():
                                      poolsize = args.threads,
                                      timeout = 15)
 
-    # Test the connection and die before we create worker threads
-    try:
-        test_connection = pool.get()
-    except cloudfiles.errors.AuthenticationFailed:
-        die("Authentication failed to endpoint %s" % args.auth_url)
-    else:
-        pool.put(test_connection)
+    test_connection(pool, args)
 
     # Spawn workers
     for _ in xrange(args.threads):
@@ -76,29 +70,43 @@ def retry_on(exception):
         return wrapper
     return decorator
 
-@retry_on((SSLError, cloudfiles.errors.NoSuchContainer))
+@retry_on(SSLError)
+def test_connection(pool, args):
+    try:
+        test_conn = pool.get()
+        container = test_conn[args.container]
+        if args.cdn_true and not container.is_public():
+                warn("This container is not public; disabling CDN URL output.")
+                args.cdn_true = False
+    except cloudfiles.errors.NoSuchContainer:
+        # Container doesn't exist. Create it.
+        warn("The container %s does not exist; creating it now."
+             % args.container)
+        container = test_conn.create_container(args.container)
+        # If URL printing is enabled, make a public container
+        if args.cdn_true:
+            container.make_public()
+    except cloudfiles.errors.AuthenticationFailed:
+        die("Authentication failed to endpoint %s" % args.auth_url)
+    except Exception as e:
+        die("Unknown error establishing connection to %s" % auth_url)
+
+    pool.put(test_conn)
+
+@retry_on(SSLError)
 def worker(pool, files, args):
     try:
         with get_cloudfiles_container(pool, args) as container:
             while True:
                 _file = files.get()
-                # Disable CDN URL printing if the container is not public
-                if args.cdn_true and not container.is_public():
-                    sys.stderr.write('[WARN] This container is not public.'
-                                     + 'Disabling CDN URL output.\n')
-                    args.cdn_true = False
-
-                if os.path.isfile(_file):
-                    upload_to_cloudfiles(container, _file, args)
-                else:
-                    sys.stderr.write('[WARN] %s does not exist. Skipping.'
-                                     % _file)
-
+                upload_to_cloudfiles(container, _file, args)
                 # Tell the Queue that this task has been processed
                 files.task_done()
     except SSLError:
-        #sys.stderr.write('[WARN] Connection timeout. Reconnecting...\n')
+        #warn('Connection timeout. Reconnecting...')
         files.task_done()
+        # Upload failed, put the file back on the queue
+        # and then re-raise the exception to retry
         files.put(_file)
         raise
 
@@ -109,11 +117,14 @@ def get_env(value, default=''):
     "Gets an environment variable"
     return os.environ.get(value, default)
 
+def warn(warning):
+    sys.stderr.write("[WARN] %s\n" % warning)
+
 def die(error):
     try:
         error()
     except TypeError:
-        sys.stderr.write("Error: " + error + "\n")
+        sys.stderr.write("[ERROR] %s\n" % error)
     sys.exit(1)
 
 def get_args():
@@ -195,20 +206,9 @@ def get_args():
 
 @contextmanager
 def get_cloudfiles_container(pool, args):
-    while True:
-        try:
-            connection = pool.get()
-            yield connection.get_container(args.container)
-        except cloudfiles.errors.NoSuchContainer:
-            sys.stderr.write("[WARN] The container %s does not exist. "
-                             % args.container)
-            sys.stderr.write("Creating it now.\n")
-            connection.create_container(args.container)
-            raise
-        else:
-            pool.put(connection)
-
-        break
+    connection = pool.get()
+    yield connection.get_container(args.container)
+    pool.put(connection)
 
 def upload_to_cloudfiles(container, filename, args):
     """
@@ -224,17 +224,19 @@ def upload_to_cloudfiles(container, filename, args):
     destination = args.destination and args.destination \
                                    or  os.path.basename(filename)
     cloudpath = container.create_object(destination)
+    success = True
 
     # If it's iterable, use CF_storage_object's send method
     if hasattr(filename, "read"):
         cloudpath.send(filename)
     # Upload file to Cloud Files using load_from_filename()
-    elif (os.path.exists(filename)):
+    elif (os.path.isfile(filename)):
         cloudpath.load_from_filename(filename)
     else:
-        die("File %s not found" % filename)
+        warn("File '%s' not found" % filename)
+        success = False
 
-    if not args.quiet:
+    if success and not args.quiet:
         print("%s uploaded successfully." % destination)
         if args.cdn_true:
             print("CDN URL: %s/%s" % (container.public_uri(), destination))
