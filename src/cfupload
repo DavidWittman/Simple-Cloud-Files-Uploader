@@ -235,7 +235,7 @@ def upload_to_cloudfiles(container, filename, args):
         die("File %s not found" % filename)
 
     if not args.quiet:
-        print("File %s uploaded successfully." % destination)
+        print("%s uploaded successfully." % destination)
         if args.cdn_true:
             print("CDN URL: %s/%s" % (container.public_uri(), destination))
 
