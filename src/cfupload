@@ -6,13 +6,18 @@
 import argparse
 import os
 import os.path
+import ssl
 import sys
 from contextlib import contextmanager
+from Queue import Queue
+from threading import Thread, current_thread
 
 import cloudfiles
 
 def main():
     "Main execution thread"
+
+    files = Queue()
     
     args = get_args()
 
@@ -20,31 +25,64 @@ def main():
     if len(args.files) is 0 and not sys.stdin.isatty():
         if not args.destination:
             die("Destination filename must be provided with -o")
-        files = [sys.stdin]
+        files.put(sys.stdin)
     elif len(args.files) > 0:
         if len(args.files) > 1 and args.destination:
             die("Destination filename can only be provided for individual "
                 + "uploads")
-        files = args.files
+        for _file in args.files:
+            files.put(_file)
     else:
         die(usage)
 
     if not args.apikey or not args.user or not args.container:
         die("Missing Cloud Files account information. Seek help.")
 
-    # Begin upload
-    with get_cloudfiles_container(args) as container:
-        # Disable CDN URL printing if the container is not public
-        if args.cdn_true and not container.is_public():
-            sys.stderr.write('[WARN] This container is not public. Disabling '
-                             + 'CDN URL output.\n')
-            args.cdn_true = False
+    # Don't use more threads than there are files to upload
+    if args.threads > files.qsize:
+        args.threads = files.qsize
 
-        for _file in files:
+    # Begin upload
+    for _ in xrange(args.threads):
+        t = Thread(target=worker, args=(files, args,))
+        t.daemon = True
+        t.start()
+
+    # Block until the queues are empty
+    files.join()
+
+def retry_on(exception):
+    def decorator(fn):
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    fn(*args, **kwargs)
+                except exception:
+                    sys.stderr.write('[ERROR] Connection timeout. Retrying.')
+                    continue
+                break
+        return wrapper
+    return decorator
+
+@retry_on(ssl.SSLError)
+def worker(files, args):
+    with get_cloudfiles_container(args) as container:
+        while True:
+            _file = files.get()
+            # Disable CDN URL printing if the container is not public
+            if args.cdn_true and not container.is_public():
+                sys.stderr.write('[WARN] This container is not public.'
+                                 + 'Disabling CDN URL output.\n')
+                args.cdn_true = False
+
             if os.path.isfile(_file):
                 upload_to_cloudfiles(container, _file, args)
             else:
-                die('Source is not a file %s' % _file)
+                sys.stderr.write('[WARN] %s does not exist. Skipping.'
+                                 % _file)
+
+            # Tell the Queue that this task has been processed
+            files.task_done()
 
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
@@ -95,6 +133,13 @@ def get_args():
         help = "Use ServiceNet for connections",
         default = False )
 
+    conngroup.add_argument(
+        "-P", "--parallel",
+        dest = "threads",
+        type = int,
+        help = "Number of threads to use",
+        default = 5 )
+
     outputgroup = parser.add_argument_group("Output options")
     
     outputgroup.add_argument(
@@ -138,7 +183,8 @@ def get_cloudfiles_container(args):
             connection = cloudfiles.get_connection(args.user,
                                                    args.apikey,
                                                    servicenet=args.servicenet,
-                                                   authurl=auth_url)
+                                                   authurl=auth_url,
+                                                   timeout=15)
             yield connection.get_container(args.container)
         except cloudfiles.errors.NoSuchContainer:
             sys.stderr.write("[WARN] The container %s does not exist. "
