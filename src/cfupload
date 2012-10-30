@@ -40,10 +40,7 @@ def main():
             args.cdn_true = False
 
         for _file in files:
-            if os.path.isfile(_file):
-                upload_to_cloudfiles(container, _file, args)
-            else:
-                die('Source is not a file %s' % _file)
+            upload_to_cloudfiles(container, _file, args)
 
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
@@ -169,7 +166,7 @@ def upload_to_cloudfiles(container, filename, args):
     elif (os.path.exists(filename)):
         cloudpath.load_from_filename(filename)
     else:
-        die("File not found")
+        die("File %s not found" % filename)
 
     if not args.quiet:
         print("File %s uploaded successfully." % destination)
