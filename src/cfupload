@@ -6,11 +6,11 @@
 import argparse
 import os
 import os.path
-import ssl
 import sys
 from contextlib import contextmanager
 from Queue import Queue
 from threading import Thread, current_thread
+from ssl import SSLError
 
 import cloudfiles
 
@@ -42,13 +42,27 @@ def main():
     if args.threads > files.qsize:
         args.threads = files.qsize
 
-    # Begin upload
+    pool = cloudfiles.ConnectionPool(args.user, args.apikey,
+                                     servicenet = args.servicenet,
+                                     authurl = args.auth_url,
+                                     poolsize = args.threads,
+                                     timeout = 15)
+
+    # Test the connection and die before we create worker threads
+    try:
+        test_connection = pool.get()
+    except cloudfiles.errors.AuthenticationFailed:
+        die("Authentication failed to endpoint %s" % args.auth_url)
+    else:
+        pool.put(test_connection)
+
+    # Spawn workers
     for _ in xrange(args.threads):
-        t = Thread(target=worker, args=(files, args,))
+        t = Thread(target=worker, args=(pool, files, args,))
         t.daemon = True
         t.start()
 
-    # Block until the queues are empty
+    # Block until the queue is empty
     files.join()
 
 def retry_on(exception):
@@ -58,38 +72,43 @@ def retry_on(exception):
                 try:
                     fn(*args, **kwargs)
                 except exception:
-                    sys.stderr.write('[ERROR] Connection timeout. Retrying.')
                     continue
                 break
         return wrapper
     return decorator
 
-@retry_on(ssl.SSLError)
-def worker(files, args):
-    with get_cloudfiles_container(args) as container:
-        while True:
-            _file = files.get()
-            # Disable CDN URL printing if the container is not public
-            if args.cdn_true and not container.is_public():
-                sys.stderr.write('[WARN] This container is not public.'
-                                 + 'Disabling CDN URL output.\n')
-                args.cdn_true = False
+@retry_on((SSLError, cloudfiles.errors.NoSuchContainer))
+def worker(pool, files, args):
+    try:
+        with get_cloudfiles_container(pool, args) as container:
+            while True:
+                _file = files.get()
+                # Disable CDN URL printing if the container is not public
+                if args.cdn_true and not container.is_public():
+                    sys.stderr.write('[WARN] This container is not public.'
+                                     + 'Disabling CDN URL output.\n')
+                    args.cdn_true = False
 
-            if os.path.isfile(_file):
-                upload_to_cloudfiles(container, _file, args)
-            else:
-                sys.stderr.write('[WARN] %s does not exist. Skipping.'
-                                 % _file)
+                if os.path.isfile(_file):
+                    upload_to_cloudfiles(container, _file, args)
+                else:
+                    sys.stderr.write('[WARN] %s does not exist. Skipping.'
+                                     % _file)
 
-            # Tell the Queue that this task has been processed
-            files.task_done()
+                # Tell the Queue that this task has been processed
+                files.task_done()
+    except SSLError:
+        #sys.stderr.write('[WARN] Connection timeout. Reconnecting...\n')
+        files.task_done()
+        files.put(_file)
+        raise
 
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
 
-def get_env(value):
+def get_env(value, default=''):
     "Gets an environment variable"
-    return os.environ.get(value, '')
+    return os.environ.get(value, default)
 
 def die(error):
     try:
@@ -124,7 +143,8 @@ def get_args():
         dest = "auth_url", 
         metavar = "<auth_url>", 
         help = "Authentication endpoint. Defaults to env[CLOUD_FILES_AUTH_URL]",
-        default = get_env('CLOUD_FILES_AUTH_URL') )
+        default = get_env('CLOUD_FILES_AUTH_URL',
+                          'https://identity.api.rackspacecloud.com/v1.0'))
 
     conngroup.add_argument(
         "-s", "--snet",
@@ -175,29 +195,19 @@ def get_args():
     return parser.parse_args()
 
 @contextmanager
-def get_cloudfiles_container(args):
-    auth_url = args.auth_url or 'https://identity.api.rackspacecloud.com/v1.0'
-
+def get_cloudfiles_container(pool, args):
     while True:
         try:
-            connection = cloudfiles.get_connection(args.user,
-                                                   args.apikey,
-                                                   servicenet=args.servicenet,
-                                                   authurl=auth_url,
-                                                   timeout=15)
+            connection = pool.get()
             yield connection.get_container(args.container)
         except cloudfiles.errors.NoSuchContainer:
             sys.stderr.write("[WARN] The container %s does not exist. "
                              % args.container)
             sys.stderr.write("Creating it now.\n")
             connection.create_container(args.container)
-            continue
-        except cloudfiles.errors.AuthenticationFailed:
-            die("Authentication failed to %s" % auth_url)
-        except Exception as e:
-            die("Unknown error establishing connection to %s" % auth_url)
+            raise
         else:
-            del connection
+            pool.put(connection)
 
         break
 
