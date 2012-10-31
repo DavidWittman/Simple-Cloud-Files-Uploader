@@ -7,8 +7,11 @@ import argparse
 import os
 import sys
 from contextlib import contextmanager
+from ssl import SSLError
 
 import cloudfiles
+
+DEFAULT_ENDPOINT = 'https://identity.api.rackspacecloud.com/v1.0'
 
 def main():
     "Main execution thread"
@@ -35,8 +38,7 @@ def main():
     with get_cloudfiles_container(args) as container:
         # Disable CDN URL printing if the container is not public
         if args.cdn_true and not container.is_public():
-            sys.stderr.write('[WARN] This container is not public. Disabling '
-                             + 'CDN URL output.\n')
+            warn('This container is not public. Disabling CDN URL output.')
             args.cdn_true = False
 
         for _file in files:
@@ -45,16 +47,19 @@ def main():
 def usage():
     sys.stderr.write("usage: %s [options] <filename>\n" % sys.argv[0])
 
-def get_env(value):
+def get_env(value, default=''):
     "Gets an environment variable"
-    return os.environ.get(value, '')
+    return os.environ.get(value, default)
 
-def die(error):
+def warn(warning):
+    sys.stderr.write("[WARN] %s\n" % warning)
+
+def die(error, code=1):
     try:
         error()
     except TypeError:
-        sys.stderr.write("Error: " + error + "\n")
-    sys.exit(1)
+        sys.stderr.write("[ERROR] %s\n" % error)
+    sys.exit(code)
 
 def get_args():
     desc = "Upload files to Rackspace Cloud Files or Openstack Swift."
@@ -82,7 +87,8 @@ def get_args():
         dest = "auth_url", 
         metavar = "<auth_url>", 
         help = "Authentication endpoint. Defaults to env[CLOUD_FILES_AUTH_URL]",
-        default = get_env('CLOUD_FILES_AUTH_URL') )
+        default = get_env('CLOUD_FILES_AUTH_URL',
+                          DEFAULT_ENDPOINT) )
 
     conngroup.add_argument(
         "-s", "--snet",
@@ -127,23 +133,42 @@ def get_args():
 
 @contextmanager
 def get_cloudfiles_container(args):
-    auth_url = args.auth_url or 'https://identity.api.rackspacecloud.com/v1.0'
+    while True:
+        try:
+            connection = cloudfiles.get_connection(args.user, args.apikey,
+                                                   servicenet = args.servicenet,
+                                                   authurl = args.auth_url,
+                                                   timeout = 15)
+            yield connection.get_container(args.container)
+        except cloudfiles.errors.NoSuchContainer:
+            warn("Container %s does not exist. Creating it now."
+                 % args.container)
+            container = connection.create_container(args.container)
+            if args.cdn_true:
+                container.make_public()
+            continue
+        except cloudfiles.errors.AuthenticationFailed:
+            die("Authentication failed to %s" % args.auth_url)
+        except Exception as e:
+            die("Unknown error establishing connection to %s" % args.auth_url)
+        else:
+            del connection
 
-    try:
-        connection = cloudfiles.get_connection(args.user,
-                                               args.apikey,
-                                               servicenet=args.servicenet,
-                                               authurl=auth_url)
-        yield connection.get_container(args.container)
-    except cloudfiles.errors.NoSuchContainer:
-        die("Container %s does not exist." % args.container)
-    except cloudfiles.errors.AuthenticationFailed:
-        die("Authentication failed to %s" % auth_url)
-    except Exception as e:
-        die("Unknown error establishing connection to %s" % auth_url)
-    else:
-        del connection
+        break
 
+def retry_on(exception):
+    def decorator(fn):
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    fn(*args, **kwargs)
+                except exception:
+                    continue
+                break
+        return wrapper
+    return decorator
+
+@retry_on(SSLError)
 def upload_to_cloudfiles(container, filename, args):
     """
     Upload an object to Cloud Files or Openstack Swift.
@@ -158,6 +183,7 @@ def upload_to_cloudfiles(container, filename, args):
     destination = args.destination and args.destination \
                                    or  os.path.basename(filename)
     cloudpath = container.create_object(destination)
+    success = True
 
     # If it's iterable, use CF_storage_object's send method
     if hasattr(filename, "read"):
@@ -166,9 +192,10 @@ def upload_to_cloudfiles(container, filename, args):
     elif (os.path.exists(filename)):
         cloudpath.load_from_filename(filename)
     else:
-        die("File %s not found" % filename)
+        warn("File %s not found" % filename)
+        success = False
 
-    if not args.quiet:
+    if success and not args.quiet:
         print("File %s uploaded successfully." % destination)
         if args.cdn_true:
             print("CDN URL: %s/%s" % (container.public_uri(), destination))
