@@ -1,20 +1,24 @@
 # Simple Cloud Files Uploader
-Python script to quickly upload files to Rackspace Cloud Files or Openstack swift. Originally developed to make one-liner uploads more manageable. Supports input via file arguments or standard input.
+Python script to quickly upload files to [Rackspace Cloud Files](http://www.rackspace.com/cloud/files/) or [OpenStack Swift](http://swift.openstack.org). Originally developed to make one-liner uploads more manageable. Supports input via file arguments or standard input.
 
 ## Installation
 For the love of Guido, use [virtualenv](http://www.virtualenv.org/en/latest/index.html) with whichever of the following methods you choose:
 
 ### pip
-`pip install cfupload`
+``` bash
+$ pip install cfupload
+```
 
 ### EasyInstall
-`easy_install cfupload`
+``` bash
+$ easy_install cfupload
+```
 
 ### setuptools
-```
-git clone git://github.com/DavidWittman/Simple-Cloud-Files-Uploader.git
-cd Simple-Cloud-Files-Uploader
-python setup.py install
+``` bash
+$ git clone git://github.com/DavidWittman/Simple-Cloud-Files-Uploader.git
+$ cd Simple-Cloud-Files-Uploader
+$ python setup.py install
 ```
 
 ## Usage
@@ -56,15 +60,21 @@ Each of these examples assume you have the environment variables `CLOUD_FILES_AU
 
 ### Upload a single file
 
-`cfupload mycontainer ~/F4z2L.gif`
+``` bash
+$ cfupload mycontainer ~/F4z2L.gif
+```
 
 ### Upload multiple files
 
-`cfupload gifs ~/Pictures/*.gif`
+``` bash
+$ cfupload gifs ~/Pictures/*.gif
+```
 
 ### Upload from stdin
 
-`tar cvzf - ~/important/* | cfupload -o backup-$(date '+%Y%m$d') backups`
+``` bash
+$ tar cvzf - ~/important/* | cfupload -o backup-$(date '+%Y%m$d') backups
+```
 
 ## Pro Tips
 * Export environment variables `CLOUD_FILES_{APIKEY,USERNAME,AUTH_URL}` in your bash_profile to prevent the need to specify these options each time you run cfupload
